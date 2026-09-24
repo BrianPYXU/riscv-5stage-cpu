@@ -12,7 +12,7 @@ A RISC-V processor project implemented in Verilog, developed step by step from b
 - [x] Waveform verification with GTKWave
 
 ### Processor
-- [ ] Register File
+- [x] Register File
 - [ ] Program Counter
 - [ ] Instruction Decoder
 - [ ] Immediate Generator
