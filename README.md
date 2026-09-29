@@ -13,7 +13,7 @@ A RISC-V processor project implemented in Verilog, developed step by step from b
 
 ### Processor
 - [x] Register File
-- [ ] Program Counter
+- [x] Program Counter
 - [ ] Instruction Decoder
 - [ ] Immediate Generator
 - [ ] Datapath Integration
