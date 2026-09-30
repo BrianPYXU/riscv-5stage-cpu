@@ -21,5 +21,9 @@ always @(*)begin
         alu_control = 4'b0000;
     else if(opcode == 7'b0110011 && funct3 == 3'b000 && funct7 == 7'b0100000)
         alu_control = 4'b0001;
+    else  if(opcode == 7'b0010011 && funct3 == 3'b000 )
+        alu_control = 4'b0000;
+
+    
 end 
 endmodule
