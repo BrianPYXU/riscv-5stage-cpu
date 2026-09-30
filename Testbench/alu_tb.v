@@ -4,7 +4,7 @@ module alu_tb;
 
 reg [31:0] a;
 reg [31:0] b;
-reg [2:0] control;
+reg [3:0] control;
 
 wire [31:0] result;
 
@@ -20,16 +20,16 @@ initial begin
     $dumpvars(0,alu_tb);
     a=32'd10;
     b=32'd20;
-    control=3'b000;
+    control=4'b0000;
 
     #10;
-    control=3'b001;
+    control=4'b0001;
 
     #10;
-    control=3'b010;
+    control=4'b0010;
 
     #10;
-    control=3'b011;
+    control=4'b0011;
 
     #10;
     $finish;
