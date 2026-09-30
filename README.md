@@ -15,7 +15,7 @@ A RISC-V processor project implemented in Verilog, developed step by step from b
 - [x] Register File
 - [x] Program Counter
 - [x] Instruction Decoder
-- [ ] Immediate Generator
+- [x] Immediate Generator
 - [ ] Datapath Integration
 - [ ] 5-Stage Pipeline
 - [ ] Hazard Detection
