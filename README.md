@@ -17,7 +17,10 @@ A RISC-V processor project implemented in Verilog, developed step by step from b
 - [x] Instruction Decoder
 - [x] Immediate Generator
 - [x] Datapath Integration
-- [ ] 5-Stage Pipeline
+- [x] IF/ID Pipeline Register
+- [ ] ID/EX Pipeline Register
+- [ ] EX/MEM Pipeline Register
+- [ ] MEM/WB Pipeline Register
 - [ ] Hazard Detection
 - [ ] Data Forwarding
 
