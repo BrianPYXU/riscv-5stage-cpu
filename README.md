@@ -19,7 +19,7 @@ A RISC-V processor project implemented in Verilog, developed step by step from b
 - [x] Datapath Integration
 - [x] IF/ID Pipeline Register
 - [x] ID/EX Pipeline Register
-- [ ] EX/MEM Pipeline Register
+- [x] EX/MEM Pipeline Register
 - [ ] MEM/WB Pipeline Register
 - [ ] Hazard Detection
 - [ ] Data Forwarding
