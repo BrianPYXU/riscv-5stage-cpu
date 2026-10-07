@@ -20,9 +20,11 @@ A RISC-V processor project implemented in Verilog, developed step by step from b
 - [x] IF/ID Pipeline Register
 - [x] ID/EX Pipeline Register
 - [x] EX/MEM Pipeline Register
-- [ ] MEM/WB Pipeline Register
-- [ ] Hazard Detection
+- [x] MEM/WB Pipeline Register
+- [ ] 5-Stage Pipeline Integration
 - [ ] Data Forwarding
+- [ ] Hazard Detection / Stall
+- [ ] Branch Handling
 
 ## Project Structure
 
