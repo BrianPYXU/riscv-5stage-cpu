@@ -1,12 +1,53 @@
 # 5-Stage Pipelined RISC-V CPU (Work in Progress)
 
-A RISC-V processor project implemented in Verilog, developed step by step from basic RTL components toward a 5-stage pipelined CPU.
+A work-in-progress 32-bit RISC-V processor implemented in Verilog and verified with Icarus Verilog and GTKWave. The current implementation includes a basic pre-pipeline datapath supporting ADD, SUB, and ADDI, together with four standalone pipeline registers intended for a 5-stage IF/ID/EX/MEM/WB architecture.
 
-The current implementation includes a basic pre-pipeline datapath for ADD, SUB, and ADDI, plus four standalone pipeline registers. The registers have not yet been integrated into a complete 5-stage CPU. Full RV32I support and end-to-end CPU verification remain future work.
+The full 5-stage CPU is not yet integrated. Instruction and data memory, the complete write-back path, forwarding, automatic hazard detection, load-use stalls, branch handling, broader RV32I support, and end-to-end program execution remain in progress.
+
+## Current Progress
+
+Completed items below refer either to standalone RTL modules or the basic pre-pipeline datapath. The pipeline-register `stall` and `flush` inputs are implemented and individually tested, but CPU-wide hazard detection and automatic stall/flush control are not yet implemented.
+
+### RTL Components
+
+- [x] 32-bit Register
+- [x] 32-bit 2-to-1 Multiplexer
+- [x] Basic 32-bit ALU
+- [x] Register File
+- [x] Program Counter (standalone module)
+- [x] Instruction Decoder (ADD, SUB, ADDI)
+- [x] Immediate Generator (ADDI I-type and store S-type immediates)
+
+### Basic Pre-Pipeline Datapath
+
+- [x] Basic Datapath Integration (ADD, SUB, ADDI)
+- [x] Register-file read, ALU operand selection, ALU execution, and register-file write-back exercised in simulation
+
+### Pipeline Registers
+
+- [x] IF/ID Pipeline Register
+- [x] ID/EX Pipeline Register
+- [x] EX/MEM Pipeline Register
+- [x] MEM/WB Pipeline Register
+
+Each pipeline register has been tested independently for reset, normal update, stall, and flush behavior.
+
+### Full CPU Integration
+
+- [ ] Initial 5-stage pipeline integration
+- [ ] Instruction Memory / Fetch Integration
+- [ ] Data Memory / Load-Store Integration
+- [ ] Complete pipelined write-back path and control-signal propagation
+- [ ] Data Forwarding
+- [ ] Hazard Detection / Stall
+- [ ] Load-Use Stall Handling
+- [ ] Branch Handling / Pipeline Flush
+- [ ] Broader RV32I instruction support
+- [ ] End-to-end program-based CPU verification
 
 ## Current Instruction Support
 
-The current pre-pipeline datapath supports:
+The current **pre-pipeline datapath** supports:
 
 | Instruction | Status |
 | --- | --- |
@@ -14,73 +55,55 @@ The current pre-pipeline datapath supports:
 | SUB | Implemented |
 | ADDI | Implemented |
 
-These instructions are implemented in the basic datapath and exercised by its component-level testbench. Instructions are supplied directly by the testbench, and register write enable is externally controlled.
+These instructions are currently exercised in the basic datapath rather than in a fully integrated pipelined CPU.
 
-Additional RV32I instructions will be added as the pipeline, memory stage, branch logic, hazard detection, and forwarding logic are integrated. The immediate generator supports ADDI I-type and store S-type immediate extraction, but load/store execution and an integrated memory stage are not implemented.
-
-## Current Progress
-
-Completed items below refer to individual modules and basic datapath integration. Pipeline-register stall/flush inputs are implemented; automatic hazard detection and CPU-wide stall/flush control remain pending.
-
-### RTL Fundamentals
-
-- [x] 32-bit Register
-- [x] 32-bit 2-to-1 Multiplexer
-- [x] Basic 32-bit ALU
-- [x] Component testbench simulation with Icarus Verilog
-- [x] Manual waveform inspection with GTKWave
-
-### Processor
-
-- [x] Register File
-- [x] Program Counter (standalone module)
-- [x] Instruction Decoder (ADD, SUB, ADDI)
-- [x] Immediate Generator (ADDI I-type and store S-type immediates)
-- [x] Basic Datapath Integration (ADD, SUB, ADDI)
-- [x] IF/ID Pipeline Register
-- [x] ID/EX Pipeline Register
-- [x] EX/MEM Pipeline Register
-- [x] MEM/WB Pipeline Register
-- [ ] Instruction Memory / Fetch Integration
-- [ ] Data Memory / Load-Store Integration
-- [ ] 5-Stage Pipeline Integration
-- [ ] Data Forwarding
-- [ ] Hazard Detection / Stall
-- [ ] Branch Handling
+The immediate generator also implements S-type immediate extraction for store instructions. This does **not** mean that store execution is currently supported; data memory and the complete load/store datapath have not yet been integrated.
 
 ## Verification Status
 
-Current verification uses component-level stimulus testbenches, Icarus Verilog simulation, and manual GTKWave inspection. Development notes and waveform screenshots are retained under `docs/notes/` and `docs/waveforms/`.
+Current verification uses dedicated Verilog testbenches, Icarus Verilog simulation, and GTKWave waveform inspection.
 
-The basic datapath testbench directly initializes internal registers and supplies instructions to exercise ADD, SUB, and ADDI. This is a basic datapath check; a complete CPU executing programs from instruction memory has not yet been verified. Final self-checking testbenches and end-to-end program-based CPU verification are planned below.
+The existing tests cover individual RTL modules, all four pipeline registers, and the basic ADD/SUB/ADDI datapath. The current datapath testbench supplies instructions directly and initializes selected register-file entries from the testbench, which is appropriate for component and datapath development but is not intended to be the final CPU verification method.
 
-## Future Work
+Planned final verification will add self-checking testbenches with automatic expected-result comparisons and explicit PASS/FAIL reporting. End-to-end tests will execute instruction sequences through instruction memory and verify the resulting architectural register and memory state, including forwarding, RAW dependencies, load-use hazards, branches, stalls, and flushes as those features are implemented.
 
-- Integrate instruction fetch, all four pipeline registers, and the write-back path into a 5-stage CPU.
-- Integrate data memory and extend the supported RV32I instruction subset.
-- Add forwarding, hazard detection with stall control, and branch/flush handling.
-- Add final self-checking testbenches with automatic expected-result comparisons, explicit PASS/FAIL results, failure exit status, and timeouts.
-- Add end-to-end program-based CPU verification: load test programs into instruction memory, let the CPU execute them, and check final architectural register and memory state. Initialize register operands through executed instructions rather than direct writes to the internal register array.
-- Include dependent instruction sequences and memory/branch cases as those features are integrated. For example, execute `addi x2, x0, 10`, `addi x3, x0, 20`, `add x5, x2, x3`, and `sub x6, x5, x2`, then automatically check `x5 = 30` and `x6 = 20`.
+GTKWave screenshots will remain as debugging and visualization evidence rather than the only source of verification.
+
+## Next Milestones
+
+1. Integrate the existing stages and four pipeline registers into an initial 5-stage pipeline, using a simplified MEM pass-through where memory behavior is not yet required.
+2. Add instruction memory and data memory.
+3. Complete control-signal propagation and the pipelined write-back path.
+4. Add forwarding logic.
+5. Add hazard detection and load-use stall handling.
+6. Add branch decision and pipeline flush handling.
+7. Extend the supported RV32I instruction subset.
+8. Add self-checking, program-based end-to-end CPU verification.
+
+An architecture diagram will be added once the stage-to-stage CPU datapath is genuinely integrated so that the diagram reflects the implemented design rather than a planned architecture.
 
 ## Project Structure
 
 ```text
 riscv-5stage-cpu/
-├── RTL/          # Verilog RTL modules
-├── Testbench/    # Component stimulus testbenches
+├── RTL/           # Verilog RTL modules
+├── Testbench/     # Component and datapath testbenches
 ├── docs/
-│   ├── notes/    # Development notes
-│   └── waveforms/ # Waveform screenshots
+│   ├── notes/     # Development notes
+│   └── waveforms/ # GTKWave screenshots
 └── README.md
 ```
+
+The development notes are retained as implementation history, while this README focuses on the current engineering state of the processor.
 
 ## Tools
 
 - Verilog
-- Icarus Verilog
+- Icarus Verilog / vvp
 - GTKWave
+- VS Code
+- Git / GitHub
 
 ## Development Status
 
-Work in progress: basic RTL modules, the ADD/SUB/ADDI pre-pipeline datapath, and all four standalone pipeline registers are implemented. Complete 5-stage pipeline integration, memory execution, forwarding, hazard detection, branch handling, and final CPU verification remain pending.
+This repository is actively being developed. The basic RTL building blocks, the ADD/SUB/ADDI pre-pipeline datapath, and all four standalone pipeline registers are implemented. The next major goal is to connect them into an initial 5-stage pipeline before adding memory behavior, forwarding, hazard handling, branches, and final program-level verification.
