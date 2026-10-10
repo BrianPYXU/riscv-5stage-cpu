@@ -28,6 +28,8 @@ wire mem_to_reg_id;
 wire [4:0] rd_ex;
 wire [31:0] read_data1_ex;
 wire [31:0] read_data2_ex;
+wire [4:0] rs1_ex;
+wire [4:0] rs2_ex;
 wire [31:0] immediate_ex;
 wire [3:0] alu_control_ex;
 wire alu_src_ex;
@@ -37,6 +39,7 @@ wire mem_write_ex;
 wire mem_to_reg_ex;
 wire [31:0] alu_result_ex;
 wire [31:0] alu_operand_b_ex;
+wire [31:0] alu_operand_a_ex;
 
 
 wire [31:0] alu_result_mem;
@@ -55,6 +58,11 @@ wire [4:0] rd_wb;
 wire reg_write_wb;
 wire [31:0] wb_data;
 
+wire [1:0] forward_a;
+wire [1:0] forward_b;
+wire [31:0] forward_a_temp;
+wire [31:0] forward_b_temp;
+wire [31:0] forward_b_data;
 
 assign instruction_if = instruction;
 
@@ -125,6 +133,8 @@ id_ex_register id_ex_reg(
     .mem_read_in(mem_read_id),
     .mem_write_in(mem_write_id),
     .mem_to_reg_in(mem_to_reg_id),
+    .rs1_in(rs1_id),
+    .rs2_in(rs2_id),
 
     .read_data1_out(read_data1_ex),
     .read_data2_out(read_data2_ex),
@@ -135,18 +145,21 @@ id_ex_register id_ex_reg(
     .reg_write_out(reg_write_ex),
     .mem_read_out(mem_read_ex),
     .mem_write_out(mem_write_ex),
-    .mem_to_reg_out(mem_to_reg_ex)
+    .mem_to_reg_out(mem_to_reg_ex),
+    .rs1_out(rs1_ex),
+    .rs2_out(rs2_ex)
+    
 );
 
 mux2 mux_ex(
-    .a(read_data2_ex),
+    .a(forward_b_data),
     .b(immediate_ex),
     .sel(alu_src_ex),
     .y(alu_operand_b_ex)
 );
 
 alu alu(
-    .a(read_data1_ex),
+    .a(alu_operand_a_ex),
     .b(alu_operand_b_ex),
     .control(alu_control_ex),
     .result(alu_result_ex)
@@ -199,6 +212,46 @@ mux2 mux_wb(
     .b(memory_data_wb),
     .sel(mem_to_reg_wb),
     .y(wb_data)
+);
+
+forwarding_unit fwd_unit(
+    .rs1_ex(rs1_ex),
+    .rs2_ex(rs2_ex),
+    .rd_mem(rd_mem),
+    .reg_write_mem(reg_write_mem),
+    .rd_wb(rd_wb),
+    .reg_write_wb(reg_write_wb),
+
+    .forward_a(forward_a),
+    .forward_b(forward_b)    
+);
+
+mux2 muxa_fwd1(
+    .a(read_data1_ex),
+    .b(wb_data),
+    .sel(forward_a[0]),
+    .y(forward_a_temp)
+);
+
+mux2 muxa_fwd2(
+    .a(forward_a_temp),
+    .b(alu_result_mem),
+    .sel(forward_a[1]),
+    .y(alu_operand_a_ex)
+);
+
+mux2 muxb_fwd1(
+    .a(read_data2_ex),
+    .b(wb_data),
+    .sel(forward_b[0]),
+    .y(forward_b_temp)
+);
+
+mux2 muxb_fwd2(
+    .a(forward_b_temp),
+    .b(alu_result_mem),
+    .sel(forward_b[1]),
+    .y(forward_b_data)
 );
 
 endmodule
