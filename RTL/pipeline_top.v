@@ -49,6 +49,7 @@ wire reg_write_mem;
 wire mem_read_mem;
 wire mem_write_mem;
 wire mem_to_reg_mem;
+wire [31:0] memory_data_mem;
 
 
 wire mem_to_reg_wb;
@@ -64,18 +65,21 @@ wire [31:0] forward_a_temp;
 wire [31:0] forward_b_temp;
 wire [31:0] forward_b_data;
 
+wire hazard_stall;
+
 assign instruction_if = instruction;
 
 program_counter pc(
     .clk(clk),
     .reset(reset),
-    .pc(pc_if)
+    .pc(pc_if),
+    .stall(hazard_stall)
 );
 
 if_id_register if_id_reg(
     .clk(clk),
     .reset(reset),
-    .stall(1'b0),
+    .stall(hazard_stall),
     .flush(1'b0),
 
     .pc_in(pc_if),
@@ -121,7 +125,7 @@ id_ex_register id_ex_reg(
     .clk(clk),
     .reset(reset),
     .stall(1'b0),
-    .flush(1'b0),
+    .flush(hazard_stall),
 
     .read_data1_in(read_data1_id),
     .read_data2_in(read_data2_id),
@@ -188,6 +192,23 @@ ex_mem_register ex_mem_reg(
     .mem_to_reg_out(mem_to_reg_mem)
 );
 
+hazard_detection_unit hazard_det(
+    .mem_read_ex(mem_read_ex),
+    .rd_ex(rd_ex),
+    .rs1_id(rs1_id),
+    .rs2_id(rs2_id),
+    .stall(hazard_stall)
+);
+
+data_memory data_mem(
+    .clk(clk),
+    .address(alu_result_mem),
+    .write_data(store_data_mem),
+    .mem_read(mem_read_mem),
+    .mem_write(mem_write_mem),
+    .read_data(memory_data_mem)
+);
+
 mem_wb_register mem_wb_reg(
     .clk(clk),
     .reset(reset),
@@ -195,7 +216,7 @@ mem_wb_register mem_wb_reg(
     .flush(1'b0),
 
     .alu_result_in(alu_result_mem),
-    .memory_data_in(32'b0),
+    .memory_data_in(memory_data_mem),
     .rd_in(rd_mem),
     .reg_write_in(reg_write_mem),
     .mem_to_reg_in(mem_to_reg_mem),

@@ -39,5 +39,17 @@ always @(*)begin
         reg_write = 1;
         alu_control = 4'b0000;      
     end    
+    else if(opcode == 7'b0000011 && funct3 == 3'b010) begin
+        mem_read = 1;
+        reg_write = 1;
+        mem_to_reg = 1;   
+        alu_src = 1;
+        alu_control = 4'b0000;
+    end
+    else if(opcode == 7'b0100011 && funct3 == 3'b010) begin
+        mem_write = 1;
+        alu_src = 1;
+        alu_control = 4'b0000;
+    end
 end 
-endmodule
+endmodule   

@@ -6,10 +6,10 @@ reg clk;
 reg reset;
 reg [31:0] instruction;
 wire [31:0] x2_value;
-wire [31:0] x3_value;
+//wire [31:0] x3_value;
 wire [31:0] x5_value;
 wire [31:0] x6_value;
-wire [31:0] x7_value;
+/*wire [31:0] x7_value;
 wire [31:0] x8_value;
 wire [31:0] x9_value;
 wire [31:0] x10_value;
@@ -17,14 +17,18 @@ wire [31:0] x11_value;
 wire [31:0] x12_value;
 wire [31:0] x13_value;
 wire [31:0] x14_value;
-wire [31:0] x15_value;
+wire [31:0] x15_value;*/
 integer errors;
 
+wire [31:0] memory_0_value;
+
+assign memory_3_value = uut.data_mem.memory[0];
+
 assign x2_value = uut.reg_file.registers[2];
-assign x3_value = uut.reg_file.registers[3];
+//assign x3_value = uut.reg_file.registers[3];
 assign x5_value = uut.reg_file.registers[5];
 assign x6_value = uut.reg_file.registers[6];
-assign x7_value = uut.reg_file.registers[7];
+/*assign x7_value = uut.reg_file.registers[7];
 assign x8_value = uut.reg_file.registers[8];
 assign x9_value = uut.reg_file.registers[9];
 assign x10_value = uut.reg_file.registers[10];
@@ -32,7 +36,7 @@ assign x11_value = uut.reg_file.registers[11];
 assign x12_value = uut.reg_file.registers[12];
 assign x13_value = uut.reg_file.registers[13];
 assign x14_value = uut.reg_file.registers[14];
-assign x15_value = uut.reg_file.registers[15];
+assign x15_value = uut.reg_file.registers[15];*/
 
 pipeline_top uut(
     .clk(clk),
@@ -49,8 +53,17 @@ initial begin
     reset = 1;
     errors = 0;
     instruction = 32'd0;
-    uut.reg_file.registers[4]=32'd20;
+    uut.reg_file.registers[2]=32'd0;
+    uut.reg_file.registers[3]=32'd20; 
+    uut.data_mem.memory[0] = 32'd12;   
 
+    #10;
+    reset = 0;
+    instruction = 32'b00000000000000010010001010000011;
+
+    #10;
+    instruction = 32'b00000000001100101000001100110011;
+/*
     #10;
     reset = 0;
     instruction = 32'b00000000101000000000000100010011; // addi x2,x0,10
@@ -123,11 +136,22 @@ initial begin
     if (x14_value != 32'd27)
         errors = errors + 1;
     if (x15_value != 32'd40)
+        errors = errors + 1;*/
+
+    #10;
+    instruction = 32'd0;
+
+    #80;
+    if (x5_value != 32'd12)
         errors = errors + 1;
+
+    if (x6_value != 32'd32)
+        errors = errors + 1;
+
     if (errors == 0)
-        $display("ALL FORWARDING TESTS PASSED");
+        $display("ALL HAZARD TESTS PASSED");
     else
-        $display("%0d FORWARDING TESTS FAILED", errors);
+        $display("%0d HAZARD TESTS FAILED", errors);
     $finish;
 end
 
