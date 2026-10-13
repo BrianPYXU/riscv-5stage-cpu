@@ -1,7 +1,6 @@
 module pipeline_top(
     input clk,
-    input reset,
-    input [31:0] instruction
+    input reset
 );
 
 
@@ -72,10 +71,14 @@ wire [31:0] forward_b_data;
 
 wire hazard_stall;
 
-assign instruction_if = instruction;
 assign branch_target_ex = pc_ex + immediate_ex;
 assign branch_equal_ex = (alu_operand_a_ex == forward_b_data);
 assign branch_taken_ex = branch_ex && branch_equal_ex;
+
+instruction_memory inst_mem(
+    .address(pc_if),
+    .instruction(instruction_if)
+);
 
 program_counter pc(
     .clk(clk),

@@ -8,9 +8,9 @@ The current design includes an integrated 5-stage pipeline:
 IF → ID → EX → MEM → WB
 ```
 
-The processor currently supports basic arithmetic instructions together with load/store execution, data forwarding, and load-use hazard handling.
+The processor currently supports arithmetic, load/store, and branch execution together with data forwarding, load-use hazard handling, control-hazard handling, and PC-based instruction fetching.
 
-Implemented instructions currently include:
+Currently implemented instructions:
 
 ```text
 ADD
@@ -18,13 +18,18 @@ SUB
 ADDI
 LW
 SW
+BEQ
 ```
 
-Data forwarding from both EX/MEM and MEM/WB has been integrated for both ALU source operands.
+The processor now fetches instructions directly from instruction memory using the program counter.
 
-A hazard detection unit has also been added to detect load-use dependencies. When required, the processor stalls the PC and IF/ID register while inserting a bubble into the ID/EX stage.
+Data forwarding from both EX/MEM and MEM/WB is integrated for both ALU source operands. Store-data forwarding is also supported so recently generated register values can be stored to memory without waiting for register-file write-back.
 
-The processor is still under development. Instruction-memory-based fetching, branch handling, broader RV32I instruction support, and final program-level verification remain in progress.
+A hazard detection unit handles load-use dependencies by holding the PC and IF/ID register while inserting a bubble into ID/EX.
+
+BEQ is resolved in the EX stage. Taken branches redirect the PC and flush wrong-path instructions from IF/ID and ID/EX.
+
+The processor is still under development. Broader RV32I instruction support and larger program-level verification remain in progress.
 
 ---
 
@@ -41,6 +46,7 @@ The processor is still under development. Instruction-memory-based fetching, bra
 - [x] Immediate Generator
 - [x] Forwarding Unit
 - [x] Data Memory
+- [x] Instruction Memory
 - [x] Hazard Detection Unit
 
 ### Pipeline Registers
@@ -57,16 +63,25 @@ Each pipeline register has been independently tested for:
 - stall
 - flush
 
-The ID/EX register also propagates source register indices (`rs1` and `rs2`) for forwarding and hazard-related decisions.
+The ID/EX register also propagates:
+
+- `rs1`
+- `rs2`
+- branch control
+- instruction PC
+
+These signals are used for forwarding, hazard detection, and branch processing in the EX stage.
 
 ---
 
 ## 5-Stage Pipeline Integration
 
-The pipelined datapath is currently integrated as:
+The current datapath is:
 
 ```text
-Instruction Input
+Program Counter
+      ↓
+Instruction Memory
       ↓
      IF
       ↓
@@ -91,6 +106,7 @@ Register File
 
 Current pipeline integration includes:
 
+- [x] PC-based instruction fetch
 - [x] IF → ID stage propagation
 - [x] ID → EX stage propagation
 - [x] EX → MEM stage propagation
@@ -100,37 +116,111 @@ Current pipeline integration includes:
 - [x] ALU operand selection
 - [x] WB selection using `mem_to_reg`
 - [x] Data-memory access in MEM stage
+- [x] Data forwarding
+- [x] Store-data forwarding
+- [x] Load-use hazard handling
+- [x] Branch target generation
+- [x] Branch redirect
+- [x] Pipeline flush for taken branches
 - [x] ADD execution
 - [x] SUB execution
 - [x] ADDI execution
 - [x] LW execution
 - [x] SW execution
+- [x] BEQ execution
 
-The processor currently receives instructions through the external `instruction` input of `pipeline_top`.
+---
 
-A dedicated instruction memory and program-driven fetch path have not yet been integrated.
+## Instruction Memory and PC-Based Fetch
+
+A 256 x 32-bit instruction memory has been integrated into the IF stage.
+
+```verilog
+reg [31:0] memory [0:255];
+```
+
+Instruction memory uses combinational read:
+
+```verilog
+assign instruction = memory[address[9:2]];
+```
+
+Because RISC-V instructions are 4 bytes:
+
+```text
+PC = 0  → memory[0]
+PC = 4  → memory[1]
+PC = 8  → memory[2]
+PC = 12 → memory[3]
+```
+
+The processor no longer requires the testbench to manually provide one instruction every cycle.
+
+The fetch path is now:
+
+```text
+PC
+↓
+Instruction Memory
+↓
+instruction_if
+↓
+IF/ID
+```
+
+### Sequential Fetch Verification
+
+The following program was loaded into instruction memory:
+
+```assembly
+addi x2, x0, 10
+addi x3, x0, 20
+add  x4, x2, x3
+```
+
+Expected final values:
+
+```text
+x2 = 10
+x3 = 20
+x4 = 30
+```
+
+The processor automatically fetched the instructions at PC values:
+
+```text
+0 → 4 → 8
+```
+
+and produced the expected architectural state.
+
+The self-checking test reported:
+
+```text
+ALL INSTRUCTION FETCH TESTS PASSED
+```
 
 ---
 
 ## Data Memory and Load/Store Support
 
-A simple 32-bit word-based data memory has been implemented.
+A 256 x 32-bit data memory is implemented.
 
-The current memory contains:
-
-```text
-256 words × 32 bits
+```verilog
+reg [31:0] memory [0:255];
 ```
 
-CPU addresses are byte addresses, while the internal memory is word indexed.
+CPU addresses are byte addresses while the internal memory is word indexed.
 
-Therefore the memory index is selected using:
+Therefore:
 
 ```verilog
 address[9:2]
 ```
 
-For example:
+is used as the memory index.
+
+Example:
 
 ```text
 CPU address = 12
@@ -138,7 +228,7 @@ CPU address = 12
 → memory[3]
 ```
 
-The memory currently uses:
+The data memory currently uses:
 
 ```text
 Synchronous write
@@ -147,37 +237,29 @@ Combinational read
 
 ### SW
 
-`SW` stores a register value into data memory.
-
 Example:
 
 ```assembly
 sw x5, 8(x2)
 ```
 
-The effective address is calculated in the EX stage:
-
-```text
-address = x2 + 8
-```
-
-The register value is then written to data memory in the MEM stage.
-
-A pipeline-level SW test verified:
+If:
 
 ```text
 x2 = 4
 x5 = 123
+```
 
-sw x5, 8(x2)
+then:
 
-address = 12
+```text
+address = 4 + 8 = 12
 memory[3] = 123
 ```
 
-### LW
+Pipeline-level verification confirmed correct store execution.
 
-`LW` loads a 32-bit word from memory and writes the result back into a register.
+### LW
 
 Example:
 
@@ -185,7 +267,7 @@ Example:
 lw x6, 8(x2)
 ```
 
-The current load path is:
+The load path is:
 
 ```text
 Base Register + Immediate
@@ -219,14 +301,14 @@ x6 = 123
 
 ## Data Forwarding
 
-Data forwarding has been integrated into the EX stage to resolve basic RAW dependencies without waiting for normal register-file write-back.
+Data forwarding is integrated into the EX stage to resolve RAW dependencies without waiting for normal register-file write-back.
 
-The forwarding unit compares the source registers of the instruction currently in EX with destination registers in later pipeline stages.
+The forwarding unit compares the EX-stage source registers against destination registers in EX/MEM and MEM/WB.
 
-Supported forwarding selections:
+Forwarding selections:
 
 ```text
-00 → original ID/EX register value
+00 → original ID/EX value
 10 → EX/MEM forwarding
 01 → MEM/WB forwarding
 ```
@@ -234,17 +316,17 @@ Supported forwarding selections:
 Forwarding is implemented independently for:
 
 ```text
-ForwardA → ALU operand A / rs1
-ForwardB → ALU operand B / rs2
+ForwardA → rs1 / ALU operand A
+ForwardB → rs2 / ALU operand B
 ```
 
-Priority is:
+Priority:
 
 ```text
 EX/MEM > MEM/WB
 ```
 
-This ensures that the newest available value is selected when both later stages contain a matching destination register.
+This ensures the newest available value is selected.
 
 Register `x0` is excluded from forwarding because it is permanently hardwired to zero.
 
@@ -259,15 +341,84 @@ Register `x0` is excluded from forwarding because it is permanently hardwired to
 - [x] Forwarding integrated into `pipeline_top`
 - [x] Dependent instruction sequences verified
 
-The MEM/WB forwarding path uses final `wb_data`, allowing the forwarded value to represent either an ALU result or a loaded memory value.
+The MEM/WB forwarding path uses final `wb_data`, allowing forwarded results to represent either an ALU result or loaded memory data.
+
+---
+
+## Store-Data Forwarding
+
+Store instructions also require the latest value of `rs2`.
+
+For example:
+
+```assembly
+addi x5, x0, 10
+sw   x5, 0(x2)
+```
+
+The updated value of `x5` may not yet be available in the register file when `SW` reads it.
+
+The store-data path therefore uses the forwarded `rs2` value:
+
+```verilog
+.store_data_in(forward_b_data)
+```
+
+instead of the original ID/EX register value.
+
+The resulting path is:
+
+```text
+Forwarded rs2
+↓
+EX/MEM store_data
+↓
+Data Memory write_data
+```
+
+### Store-Data Forwarding Verification
+
+Test sequence:
+
+```assembly
+addi x5, x0, 10
+sw   x5, 0(x2)
+```
+
+Initial state:
+
+```text
+x2 = 0
+memory[0] = 0
+```
+
+Expected:
+
+```text
+x5 = 10
+memory[0] = 10
+```
+
+Simulation produced:
+
+```text
+x5 = 0x0000000A
+memory[0] = 0x0000000A
+```
+
+The self-checking test reported:
+
+```text
+ALL STORE-DATA FORWARDING TESTS PASSED
+```
 
 ---
 
 ## Load-Use Hazard Detection
 
-Forwarding alone cannot resolve every dependency.
+Forwarding cannot fully resolve every dependency.
 
-A load-use hazard occurs when an instruction immediately after `LW` needs the value being loaded.
+A load-use hazard occurs when an instruction immediately following `LW` needs the value being loaded.
 
 Example:
 
@@ -275,8 +426,6 @@ Example:
 lw  x5, 0(x2)
 add x6, x5, x3
 ```
-
-The `ADD` needs `x5` before the `LW` result is available.
 
 The hazard detection unit checks:
 
@@ -294,7 +443,7 @@ mem_read_ex &&
 ((rd_ex == rs1_id) || (rd_ex == rs2_id))
 ```
 
-When this condition is true:
+When true:
 
 ```text
 hazard_stall = 1
@@ -304,7 +453,7 @@ hazard_stall = 1
 
 ## Load-Use Stall Handling
 
-When a load-use hazard is detected, the processor performs three actions:
+When a load-use hazard is detected:
 
 ```text
 PC      → Hold
@@ -312,17 +461,15 @@ IF/ID   → Hold
 ID/EX   → Flush / Insert Bubble
 ```
 
-The load instruction itself is allowed to continue into the MEM stage.
-
-The dependent instruction remains in ID for one extra cycle.
+The load instruction continues into MEM while the dependent instruction remains in ID for one extra cycle.
 
 Conceptually:
 
 ```text
-Before stall:
+Before:
 
-EX  = LW
-ID  = dependent ADD
+EX = LW
+ID = dependent ADD
 
 After hazard handling:
 
@@ -331,11 +478,9 @@ EX  = Bubble
 ID  = dependent ADD
 ```
 
-After one cycle, the dependent instruction can continue.
-
 ### Load-Use Verification
 
-The following sequence was tested:
+Test:
 
 ```assembly
 lw  x5, 0(x2)
@@ -350,7 +495,7 @@ x3 = 20
 memory[0] = 12
 ```
 
-Expected results:
+Expected:
 
 ```text
 x5 = 12
@@ -364,15 +509,9 @@ x5 = 0x0000000C
 x6 = 0x00000020
 ```
 
-The waveform also confirmed that:
+The waveform confirmed that `hazard_stall` was asserted for exactly one pipeline cycle.
 
-```text
-hazard_stall = 1
-```
-
-for exactly one pipeline cycle.
-
-The self-checking pipeline test reports:
+The self-checking test reported:
 
 ```text
 ALL LOAD-USE HAZARD TESTS PASSED
@@ -380,9 +519,193 @@ ALL LOAD-USE HAZARD TESTS PASSED
 
 ---
 
-## Current Instruction Support
+## Branch and Control Hazard Handling
 
-The integrated pipeline currently supports:
+`BEQ` support has been integrated.
+
+BEQ encoding:
+
+```text
+opcode = 1100011
+funct3 = 000
+```
+
+The decoder produces a `branch` control signal which is propagated through ID/EX into the EX stage.
+
+### B-Type Immediate
+
+The branch immediate is reconstructed from:
+
+```text
+imm[12]   = instruction[31]
+imm[11]   = instruction[7]
+imm[10:5] = instruction[30:25]
+imm[4:1]  = instruction[11:8]
+imm[0]    = 0
+```
+
+The sign-extended immediate is:
+
+```verilog
+{{19{instruction[31]}},
+ instruction[31],
+ instruction[7],
+ instruction[30:25],
+ instruction[11:8],
+ 1'b0}
+```
+
+### Branch Decision
+
+Branches are resolved in the EX stage.
+
+Branch target:
+
+```text
+branch_target = pc_ex + immediate_ex
+```
+
+BEQ compares the forwarded source values:
+
+```verilog
+branch_equal_ex =
+    (alu_operand_a_ex == forward_b_data);
+```
+
+Branch taken:
+
+```verilog
+branch_taken_ex =
+    branch_ex && branch_equal_ex;
+```
+
+Using forwarded values allows BEQ to depend on recently generated register results.
+
+---
+
+## Control Hazard Flush
+
+If a branch is taken:
+
+```text
+PC      → branch target
+IF/ID   → flush
+ID/EX   → flush
+```
+
+This removes wrong-path instructions already fetched before the branch decision becomes available.
+
+### Taken Branch Verification
+
+Example:
+
+```assembly
+beq  x1, x2, +8
+addi x5, x0, 99
+```
+
+With:
+
+```text
+x1 = 5
+x2 = 5
+```
+
+the branch is taken and the ADDI is flushed.
+
+Expected:
+
+```text
+x5 = 0
+```
+
+The test passed.
+
+### Not-Taken Branch Verification
+
+When:
+
+```text
+x1 != x2
+```
+
+the branch is not taken.
+
+The next sequential instruction executes normally and no branch flush is performed.
+
+This path was also verified successfully.
+
+---
+
+## End-to-End Branch Fetch Verification
+
+Branch handling was also tested together with instruction-memory-based fetching.
+
+Program:
+
+```assembly
+PC=0   beq  x1, x2, +8
+PC=4   addi x5, x0, 99
+PC=8   addi x6, x0, 42
+```
+
+Initial state:
+
+```text
+x1 = 5
+x2 = 5
+x5 = 0
+x6 = 0
+```
+
+Because:
+
+```text
+x1 == x2
+```
+
+the branch is taken.
+
+Expected behavior:
+
+```text
+PC=4 instruction → flushed
+PC redirected to 8
+PC=8 instruction → fetched and executed
+```
+
+Expected final state:
+
+```text
+x5 = 0
+x6 = 42
+```
+
+Simulation produced:
+
+```text
+x5 = 0
+x6 = 42
+```
+
+This verifies the complete branch path:
+
+```text
+BEQ decode
+→ EX-stage comparison
+→ branch taken
+→ wrong-path flush
+→ PC redirect
+→ target instruction fetch
+→ target execution
+→ register write-back
+```
+
+The self-checking branch-fetch test passed successfully.
+
+---
+
+## Current Instruction Support
 
 | Instruction | Type | Status |
 | --- | --- | --- |
@@ -391,15 +714,17 @@ The integrated pipeline currently supports:
 | ADDI | I-type | Implemented |
 | LW | I-type | Implemented |
 | SW | S-type | Implemented |
+| BEQ | B-type | Implemented |
 
 The immediate generator currently supports:
 
 ```text
-I-type immediate → ADDI, LW
-S-type immediate → SW
+I-type → ADDI, LW
+S-type → SW
+B-type → BEQ
 ```
 
-Additional RV32I instruction formats will be added later.
+Additional RV32I instructions will be added later.
 
 ---
 
@@ -408,13 +733,14 @@ Additional RV32I instruction formats will be added later.
 Verification currently uses:
 
 - dedicated Verilog testbenches
-- Icarus Verilog / `vvp`
+- Icarus Verilog
+- `vvp`
 - automatic PASS/FAIL checking
 - GTKWave waveform inspection
 
-### Component-Level Verification
+GTKWave is used as visual evidence of pipeline timing and internal behavior rather than as the only verification method.
 
-Individual RTL modules and pipeline registers have dedicated testbenches.
+### Component-Level Verification
 
 Verified modules include:
 
@@ -422,14 +748,18 @@ Verified modules include:
 - Program Counter
 - Instruction Decoder
 - Immediate Generator
-- Pipeline Registers
+- IF/ID Register
+- ID/EX Register
+- EX/MEM Register
+- MEM/WB Register
 - Forwarding Unit
 - Data Memory
+- Instruction Memory
 - Hazard Detection Unit
 
-### Forwarding Unit Verification
+### Forwarding Verification
 
-The forwarding unit has been independently tested for:
+The forwarding unit has been tested for:
 
 - no forwarding
 - EX/MEM → A
@@ -439,43 +769,45 @@ The forwarding unit has been independently tested for:
 - EX/MEM priority over MEM/WB
 - x0 exclusion
 
-The forwarding testbench uses automatic expected-result checking.
+A successful simulation reports:
+
+```text
+ALL FORWARDING TESTS PASSED
+```
 
 ### Hazard Detection Verification
 
-The hazard detection unit has been independently tested for:
+The hazard detection unit has been tested for:
 
 - non-load instruction → no stall
 - load destination matching `rs1`
 - load destination matching `rs2`
-- no source-register match
+- no dependency
 - `rd = x0` exclusion
-
-The testbench automatically checks the expected value of `stall`.
 
 ### Data Memory Verification
 
-Data memory has been independently verified for:
+Data memory has been verified for:
 
 - synchronous word write
 - combinational word read
 - byte-address to word-index conversion
 
-Example:
+### Instruction Memory Verification
 
-```text
-address = 12
-memory index = 3
-write_data = 123
-```
+Instruction memory has been verified for:
 
-The expected value was correctly stored and read back.
+- combinational instruction read
+- correct byte-address to word-index conversion
+- sequential PC-based instruction fetching
 
 ---
 
 ## Pipeline-Level Verification
 
-The integrated pipeline was first verified using independent arithmetic instructions:
+Pipeline-level testing currently includes:
+
+### Independent Arithmetic Instructions
 
 ```assembly
 addi x2, x1, 8
@@ -483,9 +815,9 @@ add  x3, x4, x5
 sub  x6, x7, x8
 ```
 
-The expected register results were correctly written back through the pipeline.
+Expected register values were correctly written back.
 
-Forwarding was then verified using dependent instruction sequences.
+### Forwarding Dependencies
 
 Example:
 
@@ -494,25 +826,50 @@ addi x2, x0, 10
 add  x3, x2, x4
 ```
 
-The second instruction receives the new value of `x2` through EX/MEM forwarding instead of waiting for register-file write-back.
+The dependent instruction receives the new value through EX/MEM forwarding.
 
-A larger forwarding test sequence verifies EX/MEM and MEM/WB forwarding for both ALU operands together with priority handling.
+A larger forwarding test also verifies:
 
-Load/store execution has also been verified through the full pipeline.
+- EX/MEM forwarding
+- MEM/WB forwarding
+- both ALU operands
+- forwarding priority
 
-Finally, a dependent `LW → ADD` sequence was used to verify load-use hazard detection, PC/IF-ID stalling, bubble insertion, and correct execution after the stall.
+### Load/Store Execution
 
-Expected architectural register values are checked automatically by the testbench.
+Both LW and SW have been verified through the full pipeline.
 
-GTKWave is used as visual evidence of timing and pipeline behavior rather than as the only verification method.
+### Load-Use Dependency
+
+```assembly
+lw  x5, 0(x2)
+add x6, x5, x3
+```
+
+Correct one-cycle stall behavior and final architectural results were verified.
+
+### Store-Data Dependency
+
+```assembly
+addi x5, x0, 10
+sw   x5, 0(x2)
+```
+
+Store-data forwarding correctly writes the newest `x5` value to memory.
+
+### Branch Execution
+
+Both taken and not-taken BEQ paths have been verified.
+
+### PC-Based Program Execution
+
+The processor can now automatically fetch and execute a small program directly from instruction memory.
 
 ---
 
 ## Example Forwarding Test Results
 
-The forwarding integration test verifies a sequence containing multiple RAW dependencies.
-
-Expected final values include:
+A forwarding test sequence produced the following expected final values:
 
 ```text
 x2  = 10
@@ -530,21 +887,7 @@ x14 = 27
 x15 = 40
 ```
 
-All values are automatically checked by the pipeline testbench.
-
-A successful forwarding simulation reports:
-
-```text
-ALL FORWARDING TESTS PASSED
-```
-
-The current load-use hazard test also performs automatic checking of the final architectural state.
-
-A successful hazard simulation reports:
-
-```text
-ALL LOAD-USE HAZARD TESTS PASSED
-```
+All values were automatically checked by the testbench.
 
 ---
 
@@ -552,52 +895,50 @@ ALL LOAD-USE HAZARD TESTS PASSED
 
 The processor is not yet a complete RV32I CPU.
 
-The main remaining features are:
+Completed:
 
-- [ ] Instruction Memory / Fetch Integration
+- [x] 5-stage pipeline integration
+- [x] Data forwarding
 - [x] Data Memory
-- [x] LW Support
-- [x] SW Support
+- [x] Instruction Memory
+- [x] PC-based instruction fetch
+- [x] LW support
+- [x] SW support
+- [x] Store-data forwarding
 - [x] Hazard Detection Unit
-- [x] Load-Use Stall Handling
-- [x] PC Stall Control
-- [x] IF/ID Stall Control
-- [x] Pipeline Bubble Insertion
-- [ ] Branch Decision Logic
-- [ ] Branch Target Generation
-- [ ] Pipeline Flush on Taken Branches
-- [ ] Broader RV32I Instruction Support
-- [ ] Instruction-Memory-Based Program Execution
-- [ ] End-to-End Architectural Verification
+- [x] Load-use stall handling
+- [x] PC stall control
+- [x] IF/ID stall control
+- [x] Pipeline bubble insertion
+- [x] BEQ support
+- [x] Branch decision logic
+- [x] Branch target generation
+- [x] PC redirect
+- [x] Pipeline flush on taken branches
+- [x] Instruction-memory-based program execution
+- [x] Basic end-to-end branch verification
 
-### Possible Datapath Improvements
+Remaining:
 
-Store-data forwarding is not yet fully handled.
-
-The current EX/MEM store-data path uses the register value propagated from ID/EX.
-
-A future improvement can forward the newest `rs2` value into the store-data path so sequences such as:
-
-```assembly
-addi x5, x0, 10
-sw   x5, 0(x2)
-```
-
-can execute correctly without requiring additional spacing.
+- [ ] Broader RV32I instruction support
+- [ ] Additional ALU operations
+- [ ] Larger multi-instruction test programs
+- [ ] More dependency and corner-case testing
+- [ ] Final end-to-end architectural verification
+- [ ] Final documentation and waveform cleanup
 
 ---
 
 ## Next Milestones
 
-1. Add branch decision logic.
-2. Add branch target generation.
-3. Add pipeline flush handling for taken branches.
-4. Expand the supported RV32I instruction subset.
-5. Add instruction memory and instruction-fetch integration.
-6. Add instruction-memory-based program execution.
-7. Improve store-data forwarding.
-8. Add larger self-checking instruction sequences.
-9. Add final program-level CPU verification.
+1. Add additional RV32I ALU instructions such as AND, OR, XOR, and SLT.
+2. Extend decoder and ALU control support.
+3. Verify the new instructions independently.
+4. Create a larger mixed instruction program.
+5. Exercise forwarding, load-use stalls, memory operations, and branches in one program.
+6. Add final self-checking architectural verification.
+7. Clean up representative GTKWave screenshots.
+8. Finalize README and project documentation.
 
 ---
 
@@ -607,12 +948,20 @@ can execute correctly without requiring additional spacing.
 riscv-5stage-cpu/
 ├── RTL/
 │   ├── pipeline_top.v
+│   ├── program_counter.v
+│   ├── instruction_memory.v
+│   ├── instruction_decoder.v
+│   ├── immediate_generator.v
+│   ├── register_file.v
+│   ├── alu.v
+│   ├── mux2.v
 │   ├── forwarding_unit.v
 │   ├── hazard_detection_unit.v
 │   ├── data_memory.v
-│   ├── program_counter.v
-│   ├── instruction_decoder.v
-│   ├── immediate_generator.v
+│   ├── if_id_register.v
+│   ├── id_ex_register.v
+│   ├── ex_mem_register.v
+│   ├── mem_wb_register.v
 │   └── ...
 │
 ├── Testbench/
@@ -620,12 +969,16 @@ riscv-5stage-cpu/
 │   ├── forwarding_unit_tb.v
 │   ├── hazard_detection_unit_tb.v
 │   ├── data_memory_tb.v
+│   ├── instruction_memory_tb.v
 │   └── ...
 │
 ├── docs/
 │   ├── notes/
 │   │   ├── day12.md
 │   │   ├── day13.md
+│   │   ├── day14.md
+│   │   ├── day15.md
+│   │   ├── day16.md
 │   │   └── ...
 │   │
 │   └── waveforms/
@@ -657,7 +1010,9 @@ Development notes are retained as implementation history, while this README desc
 
 This repository is actively being developed.
 
-The current processor contains an integrated 5-stage IF/ID/EX/MEM/WB datapath capable of executing:
+The processor currently contains an integrated 5-stage IF/ID/EX/MEM/WB pipeline capable of automatically fetching and executing instructions from instruction memory.
+
+Current implemented instructions include:
 
 ```text
 ADD
@@ -665,12 +1020,15 @@ SUB
 ADDI
 LW
 SW
+BEQ
 ```
 
-EX/MEM and MEM/WB forwarding have been integrated for both ALU source operands and verified using self-checking dependent-instruction tests.
+EX/MEM and MEM/WB forwarding are integrated for both ALU source operands. Store-data forwarding is also supported for dependent SW instructions.
 
-A data-memory datapath has been integrated into the MEM stage, allowing both load and store instructions to execute through the pipeline.
+Load-use hazards are handled by holding the PC and IF/ID register while inserting a bubble into ID/EX.
 
-A load-use hazard detection unit has also been integrated. When a dependent instruction immediately follows a load, the processor holds the PC and IF/ID register while inserting a bubble into ID/EX. The mechanism has been verified using a dependent `LW → ADD` sequence and automatic architectural-result checking.
+BEQ is resolved in the EX stage using forwarded operands. Taken branches redirect the PC and flush wrong-path instructions from IF/ID and ID/EX.
 
-The next major development step is branch and control-hazard handling, followed by broader RV32I support, instruction-memory-based execution, and final program-level CPU verification.
+Instruction memory is integrated with the program counter, allowing the processor to execute sequential programs and automatically fetch branch target instructions.
+
+The next major development step is broader RV32I instruction support, followed by larger mixed-instruction program testing and final architectural verification.
