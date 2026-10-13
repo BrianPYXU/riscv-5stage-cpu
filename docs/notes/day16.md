@@ -1,6 +1,3 @@
-## `day16.md`
-
-```markdown
 # Day 16 - Instruction Memory and PC-Based Fetch
 
 ## Goal

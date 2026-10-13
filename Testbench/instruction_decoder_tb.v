@@ -13,6 +13,7 @@ wire mem_read;
 wire mem_write;
 wire mem_to_reg;
 wire alu_src;
+wire branch;
 
 instruction_decoder uut(
     .instruction(instruction),
@@ -27,7 +28,8 @@ instruction_decoder uut(
     .mem_read(mem_read),
     .mem_write(mem_write),
     .mem_to_reg(mem_to_reg),
-    .alu_src(alu_src)
+    .alu_src(alu_src),
+    .branch(branch)
 );
 
 initial begin
@@ -52,6 +54,34 @@ initial begin
     #1;    
     $display("ADDI: reg_write=%b mem_read=%b mem_write=%b mem_to_reg=%b alu_src=%b",
             reg_write, mem_read, mem_write, mem_to_reg, alu_src);
+
+    #10;
+    instruction = 32'b00000000001000001111001010110011;
+
+    #1;
+    $display("AND: reg_write=%b mem_read=%b mem_write=%b mem_to_reg=%b alu_src=%b alu_control=%b",
+            reg_write, mem_read, mem_write, mem_to_reg, alu_src, alu_control);
+
+    #10;
+    instruction = 32'b00000000001000001110001010110011;
+
+    #1;
+    $display("or: reg_write=%b mem_read=%b mem_write=%b mem_to_reg=%b alu_src=%b alu_control=%b",
+            reg_write, mem_read, mem_write, mem_to_reg, alu_src, alu_control);
+
+    #10;
+    instruction = 32'b00000000001000000100001010110011;
+
+    #1;
+    $display("xor: reg_write=%b mem_read=%b mem_write=%b mem_to_reg=%b alu_src=%b alu_control=%b",
+            reg_write, mem_read, mem_write, mem_to_reg, alu_src, alu_control);
+
+    #10;
+    instruction = 32'b00000000001000001010001010110011;
+
+    #1;
+    $display("slt: reg_write=%b mem_read=%b mem_write=%b mem_to_reg=%b alu_src=%b alu_control=%b",
+            reg_write, mem_read, mem_write, mem_to_reg, alu_src, alu_control);
 
     #10;
     instruction = 32'd0;

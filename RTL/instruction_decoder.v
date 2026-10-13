@@ -56,6 +56,21 @@ always @(*)begin
     else if(opcode == 7'b1100011 && funct3 == 3'b000) begin
         branch = 1;
     end
-    
+    else if(opcode == 7'b0110011 && funct3 == 3'b111 && funct7 == 7'b0000000) begin
+        alu_control = 4'b0010;
+        reg_write = 1;
+    end
+    else if(opcode == 7'b0110011 && funct3 == 3'b110 && funct7 == 7'b0000000) begin 
+        reg_write = 1;
+        alu_control = 4'b0011;
+    end
+    else if(opcode == 7'b0110011 && funct3 == 3'b100 && funct7 == 7'b0000000) begin
+        alu_control = 4'b0100;
+        reg_write = 1;
+    end
+    else if(opcode == 7'b0110011 && funct3 == 3'b010 && funct7 == 7'b0000000) begin
+        alu_control = 4'b0101;
+        reg_write = 1;
+    end
 end 
 endmodule   

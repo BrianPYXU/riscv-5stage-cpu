@@ -1,6 +1,3 @@
-## `day15.md`
-
-```markdown
 # Day 15 - BEQ, Control Hazards, and Store-Data Forwarding
 
 ## Goal

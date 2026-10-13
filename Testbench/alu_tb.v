@@ -32,6 +32,17 @@ initial begin
     control=4'b0011;
 
     #10;
+    control=4'b0100;
+
+    #10;
+    control=4'b0101;
+
+    #10;
+    a = -32'sd5;
+    b = 32'd3;
+    control=4'b0101;
+
+    #10;
     $finish;
 end
 
