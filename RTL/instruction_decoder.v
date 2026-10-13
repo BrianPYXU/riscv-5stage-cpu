@@ -11,7 +11,8 @@ module instruction_decoder(
     output reg mem_write,
     output reg mem_to_reg,
     output reg [3:0] alu_control,
-    output reg alu_src
+    output reg alu_src,
+    output reg branch
 );
 assign opcode = instruction[6:0];
 assign rd = instruction[11:7];
@@ -26,6 +27,7 @@ always @(*)begin
     mem_write = 0;
     mem_to_reg = 0;
     alu_src = 0;
+    branch = 0;
     if(opcode == 7'b0110011 && funct3 == 3'b000 && funct7 == 7'b0000000) begin
         alu_control = 4'b0000;
         reg_write = 1;
@@ -51,5 +53,9 @@ always @(*)begin
         alu_src = 1;
         alu_control = 4'b0000;
     end
+    else if(opcode == 7'b1100011 && funct3 == 3'b000) begin
+        branch = 1;
+    end
+    
 end 
 endmodule   

@@ -23,6 +23,7 @@ wire reg_write_id;
 wire mem_read_id;
 wire mem_write_id;
 wire mem_to_reg_id;
+wire branch_id;
 
 
 wire [4:0] rd_ex;
@@ -40,7 +41,11 @@ wire mem_to_reg_ex;
 wire [31:0] alu_result_ex;
 wire [31:0] alu_operand_b_ex;
 wire [31:0] alu_operand_a_ex;
-
+wire branch_ex;
+wire [31:0] pc_ex;
+wire [31:0] branch_target_ex;
+wire branch_equal_ex;
+wire branch_taken_ex;
 
 wire [31:0] alu_result_mem;
 wire [31:0] store_data_mem;
@@ -68,11 +73,16 @@ wire [31:0] forward_b_data;
 wire hazard_stall;
 
 assign instruction_if = instruction;
+assign branch_target_ex = pc_ex + immediate_ex;
+assign branch_equal_ex = (alu_operand_a_ex == forward_b_data);
+assign branch_taken_ex = branch_ex && branch_equal_ex;
 
 program_counter pc(
     .clk(clk),
     .reset(reset),
     .pc(pc_if),
+    .branch_taken(branch_taken_ex),
+    .branch_target(branch_target_ex),
     .stall(hazard_stall)
 );
 
@@ -80,7 +90,7 @@ if_id_register if_id_reg(
     .clk(clk),
     .reset(reset),
     .stall(hazard_stall),
-    .flush(1'b0),
+    .flush(branch_taken_ex),
 
     .pc_in(pc_if),
     .pc_out(pc_id),
@@ -102,7 +112,8 @@ instruction_decoder dec(
     .mem_write(mem_write_id),
     .mem_to_reg(mem_to_reg_id),
     .alu_control(alu_control_id),
-    .alu_src(alu_src_id)
+    .alu_src(alu_src_id),
+    .branch(branch_id)
 );
 
 register_file reg_file(
@@ -125,7 +136,7 @@ id_ex_register id_ex_reg(
     .clk(clk),
     .reset(reset),
     .stall(1'b0),
-    .flush(hazard_stall),
+    .flush(hazard_stall || branch_taken_ex),
 
     .read_data1_in(read_data1_id),
     .read_data2_in(read_data2_id),
@@ -139,6 +150,8 @@ id_ex_register id_ex_reg(
     .mem_to_reg_in(mem_to_reg_id),
     .rs1_in(rs1_id),
     .rs2_in(rs2_id),
+    .branch_in(branch_id),
+    .pc_in(pc_id),
 
     .read_data1_out(read_data1_ex),
     .read_data2_out(read_data2_ex),
@@ -151,8 +164,9 @@ id_ex_register id_ex_reg(
     .mem_write_out(mem_write_ex),
     .mem_to_reg_out(mem_to_reg_ex),
     .rs1_out(rs1_ex),
-    .rs2_out(rs2_ex)
-    
+    .rs2_out(rs2_ex),
+    .branch_out(branch_ex),
+    .pc_out(pc_ex)
 );
 
 mux2 mux_ex(
@@ -176,7 +190,7 @@ ex_mem_register ex_mem_reg(
     .flush(1'b0),
 
     .alu_result_in(alu_result_ex),
-    .store_data_in(read_data2_ex),
+    .store_data_in(forward_b_data),
     .rd_in(rd_ex),
     .reg_write_in(reg_write_ex),
     .mem_read_in(mem_read_ex),

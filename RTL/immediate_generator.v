@@ -9,7 +9,8 @@ always @(*)begin
         immediate={{20{instruction[31]}},instruction[31:20]};
     else if(instruction[6:0] == 7'b0100011)
         immediate={{20{instruction[31]}},instruction[31:25],instruction[11:7]};
+    else if(instruction[6:0] == 7'b1100011)
+        immediate={{19{instruction[31]}},instruction[31],instruction[7],instruction[30:25],instruction[11:8],1'b0};
 
-    
 end
 endmodule

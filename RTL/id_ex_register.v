@@ -11,12 +11,15 @@ module id_ex_register(
     input [4:0] rs2_in,
     input [4:0] rd_in,
     input [3:0] alu_control_in,
+    input branch_in,
     input alu_src_in,
     input reg_write_in,
     input mem_read_in,
     input mem_write_in,
     input mem_to_reg_in,
+    input [31:0] pc_in,
 
+    
     output reg [31:0] read_data1_out,
     output reg [31:0] read_data2_out,
     output reg [31:0] immediate_out,    
@@ -24,12 +27,13 @@ module id_ex_register(
     output reg [4:0] rs2_out,
     output reg [4:0] rd_out,
     output reg [3:0] alu_control_out,
+    output reg branch_out,
     output reg alu_src_out,
     output reg reg_write_out,
     output reg mem_read_out,
     output reg mem_write_out,
-    output reg mem_to_reg_out
-
+    output reg mem_to_reg_out,
+    output reg [31:0] pc_out
 );
 always @(posedge clk) begin
     if (reset) begin
@@ -45,6 +49,8 @@ always @(posedge clk) begin
         mem_to_reg_out <= 1'b0;
         rs1_out <= 5'b0;
         rs2_out <= 5'b0;
+        branch_out <= 0;
+        pc_out <= 32'd0;
     end
     else if (flush) begin
         read_data1_out <= 32'd0;
@@ -59,6 +65,8 @@ always @(posedge clk) begin
         mem_to_reg_out <= 1'b0;
         rs1_out <= 5'b0;
         rs2_out <= 5'b0;
+        branch_out <= 0;
+        pc_out <= 32'd0;
     end
     else if (!stall) begin
         read_data1_out <= read_data1_in;
@@ -73,6 +81,8 @@ always @(posedge clk) begin
         mem_to_reg_out <= mem_to_reg_in;
         rs1_out <= rs1_in;
         rs2_out <= rs2_in;
+        branch_out <= branch_in;
+        pc_out <= pc_in;
     end
 end
 endmodule
