@@ -23,6 +23,8 @@ wire mem_read_id;
 wire mem_write_id;
 wire mem_to_reg_id;
 wire branch_id;
+wire uses_rs1_id;
+wire uses_rs2_id;
 
 
 wire [4:0] rd_ex;
@@ -116,7 +118,9 @@ instruction_decoder dec(
     .mem_to_reg(mem_to_reg_id),
     .alu_control(alu_control_id),
     .alu_src(alu_src_id),
-    .branch(branch_id)
+    .branch(branch_id),
+    .uses_rs1(uses_rs1_id),
+    .uses_rs2(uses_rs2_id)
 );
 
 register_file reg_file(
@@ -214,7 +218,9 @@ hazard_detection_unit hazard_det(
     .rd_ex(rd_ex),
     .rs1_id(rs1_id),
     .rs2_id(rs2_id),
-    .stall(hazard_stall)
+    .stall(hazard_stall),
+    .uses_rs1(uses_rs1_id),
+    .uses_rs2(uses_rs2_id)
 );
 
 data_memory data_mem(
