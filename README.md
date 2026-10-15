@@ -10,6 +10,14 @@ The project was developed and verified using Icarus Verilog, `vvp`, and GTKWave.
 
 ---
 
+## Project Status
+
+**Completed for the current project scope.**
+
+The final regression suite passed all key tests, including forwarding, hazards, branch handling, memory access, logic instructions, and mixed-program execution.
+
+---
+
 ## Architecture
 
 The processor uses a classic 5-stage pipeline:
@@ -87,7 +95,7 @@ The current processor supports:
 
 ## ALU Operations
 
-The ALU currently uses the following control encoding:
+The ALU uses the following control encoding:
 
 ```text
 0000 → ADD
@@ -98,7 +106,7 @@ The ALU currently uses the following control encoding:
 0101 → SLT
 ```
 
-`SLT` performs a signed comparison:
+`SLT` performs signed comparison:
 
 ```verilog
 result = ($signed(a) < $signed(b)) ? 32'd1 : 32'd0;
@@ -135,7 +143,7 @@ PC = 8   → memory[2]
 PC = 12  → memory[3]
 ```
 
-The instruction-fetch path is:
+The fetch path is:
 
 ```text
 Program Counter
@@ -151,7 +159,7 @@ Instruction Memory
 
 ## Data Memory
 
-The processor also contains a 256 x 32-bit data memory.
+The processor contains a 256 x 32-bit data memory.
 
 ```verilog
 reg [31:0] memory [0:255];
@@ -207,7 +215,7 @@ addi x2, x0, 10
 add  x3, x1, x2
 ```
 
-The ADD can receive recently generated operands through forwarding without waiting for both values to complete normal write-back.
+The ADD can receive recently generated operands through forwarding without waiting for normal register-file write-back.
 
 ---
 
@@ -232,8 +240,6 @@ EX/MEM store_data
 Data Memory write_data
 ```
 
-This avoids waiting for `x5` to complete register-file write-back.
-
 ---
 
 ## Load-Use Hazard Detection
@@ -247,7 +253,7 @@ lw  x5, 0(x2)
 add x6, x5, x3
 ```
 
-The processor detects this dependency and performs:
+The processor detects the dependency and performs:
 
 ```text
 PC      → Hold
@@ -285,7 +291,7 @@ Current source usage:
 | SW | 1 | 1 |
 | BEQ | 1 | 1 |
 
-The load-use condition is therefore:
+The load-use condition is:
 
 ```verilog
 mem_read_ex &&
@@ -296,9 +302,7 @@ mem_read_ex &&
 )
 ```
 
-This prevents unnecessary stalls caused by instruction bits that look like an `rs2` field but are actually part of an immediate value.
-
-For example, an ADDI instruction does not stall simply because its immediate bits happen to match the destination register of a previous load.
+This prevents unnecessary stalls caused by instruction bits that resemble an `rs2` field but are actually part of an immediate value.
 
 ---
 
@@ -386,7 +390,7 @@ EX/MEM
 MEM/WB
 ```
 
-The pipeline registers support the control needed for:
+The pipeline registers support:
 
 ```text
 Reset
@@ -395,7 +399,7 @@ Stall
 Flush
 ```
 
-The ID/EX register carries additional information required by later stages, including:
+The ID/EX register carries information required by later stages, including:
 
 ```text
 rs1
@@ -506,17 +510,48 @@ GTKWave
 Self-checking Verilog testbenches
 ```
 
-GTKWave is used for visual timing inspection, while automatic self-checking testbenches are used to determine PASS/FAIL results.
+GTKWave is used for visual timing inspection, while automatic self-checking testbenches determine PASS/FAIL results.
+
+### Final Regression Status
+
+The final key regression suite passed:
+
+```text
+8 / 8 tests passed
+```
+
+Verified tests:
+
+```text
+hazard_detection_unit_tb
+forwarding_unit_tb
+pipeline_logic_tb
+pipeline_load_use_tb
+pipeline_store_forwarding_tb
+pipeline_branch_tb
+pipeline_branch_fetch_tb
+pipeline_final_tb
+```
 
 ### Standalone Tests
 
-Examples include:
+Additional module-level tests include:
 
 ```text
+alu_tb.v
+data_memory_tb.v
 forwarding_unit_tb.v
 hazard_detection_unit_tb.v
-data_memory_tb.v
+immediate_generator_tb.v
+instruction_decoder_tb.v
 instruction_memory_tb.v
+program_counter_tb.v
+register_file_tb.v
+if_id_register_tb.v
+id_ex_register_tb.v
+ex_mem_register_tb.v
+mem_wb_register_tb.v
+mux2_tb.v
 ```
 
 ### Pipeline Regression Tests
@@ -531,8 +566,6 @@ pipeline_branch_tb.v
 pipeline_branch_fetch_tb.v
 pipeline_final_tb.v
 ```
-
-These tests preserve previously verified behavior so new changes can be checked without overwriting older integration tests.
 
 ---
 
@@ -564,6 +597,36 @@ Final mixed-program execution
 
 ---
 
+## Representative Waveforms
+
+Representative GTKWave results are stored under:
+
+```text
+docs/waveforms/
+```
+
+Important examples include:
+
+```text
+pipeline_final_waveform.png
+pipeline_branch_fetch_waveform.png
+hazard_detection_unit_waveform.png
+forwarding_integration_waveform.png
+data_memory_waveform.png
+```
+
+These waveforms provide visual verification of:
+
+```text
+Mixed-program execution
+Branch redirect and flush
+Source-aware hazard detection
+Forwarding behavior
+Memory access
+```
+
+---
+
 ## Project Structure
 
 ```text
@@ -583,34 +646,43 @@ riscv-5stage-cpu/
 │   ├── if_id_register.v
 │   ├── id_ex_register.v
 │   ├── ex_mem_register.v
-│   ├── mem_wb_register.v
-│   └── ...
+│   └── mem_wb_register.v
 │
 ├── Testbench/
+│   ├── alu_tb.v
+│   ├── data_memory_tb.v
+│   ├── forwarding_unit_tb.v
+│   ├── hazard_detection_unit_tb.v
+│   ├── immediate_generator_tb.v
+│   ├── instruction_decoder_tb.v
+│   ├── instruction_memory_tb.v
+│   ├── program_counter_tb.v
+│   ├── register_file_tb.v
+│   ├── if_id_register_tb.v
+│   ├── id_ex_register_tb.v
+│   ├── ex_mem_register_tb.v
+│   ├── mem_wb_register_tb.v
+│   ├── mux2_tb.v
 │   ├── pipeline_logic_tb.v
 │   ├── pipeline_load_use_tb.v
 │   ├── pipeline_store_forwarding_tb.v
 │   ├── pipeline_branch_tb.v
 │   ├── pipeline_branch_fetch_tb.v
-│   ├── pipeline_final_tb.v
-│   ├── forwarding_unit_tb.v
-│   ├── hazard_detection_unit_tb.v
-│   ├── data_memory_tb.v
-│   ├── instruction_memory_tb.v
-│   └── ...
+│   └── pipeline_final_tb.v
 │
 ├── docs/
 │   ├── notes/
-│   │   ├── day12.md
-│   │   ├── day13.md
-│   │   ├── day14.md
-│   │   ├── day15.md
-│   │   ├── day16.md
+│   │   ├── day01.md
+│   │   ├── day02.md
+│   │   ├── ...
 │   │   ├── day17.md
-│   │   ├── day18.md
-│   │   └── ...
+│   │   └── day18.md
 │   │
 │   └── waveforms/
+│       ├── pipeline_final_waveform.png
+│       ├── pipeline_branch_fetch_waveform.png
+│       ├── hazard_detection_unit_waveform.png
+│       ├── forwarding_integration_waveform.png
 │       └── ...
 │
 └── README.md
@@ -628,9 +700,15 @@ docs/notes/
 
 They document the project incrementally from basic RTL modules to complete pipeline integration.
 
-Later notes cover:
+Topics include:
 
 ```text
+RTL fundamentals
+Register file
+Program counter
+Instruction decoding
+Immediate generation
+Pipeline registers
 Pipeline integration
 Forwarding
 Load/store support
@@ -657,11 +735,11 @@ Hazard detection refinement
 
 ---
 
-## Current Status
+## Final Status
 
-The main processor implementation is complete for the current project scope.
+The project is complete for the current scope.
 
-Completed features include:
+Implemented features include:
 
 ```text
 5-stage IF/ID/EX/MEM/WB pipeline
@@ -685,7 +763,7 @@ Self-checking regression tests
 Final mixed-program verification
 ```
 
-The current supported instruction subset is:
+The supported instruction subset is:
 
 ```text
 ADD
@@ -702,4 +780,4 @@ BEQ
 
 The processor is not a complete RV32I implementation.
 
-The remaining work is primarily repository cleanup, representative waveform selection, final regression testing, and documentation polish for portfolio presentation.
+The final regression suite passed all 8 key tests successfully.
