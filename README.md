@@ -232,7 +232,7 @@ More captures, including forwarding and hazard-unit simulations, are available i
 
 ### Development notes
 
-The notes preserve the project as it evolved; early entries describe the implementation at that point in development.
+The notes preserve the project as it evolved; early entries describe the implementation at that point in development. The [Day 18 postscript](docs/notes/day18.md#postscript-write-back-bypass-and-final-test-extension) records the later write-back bypass and mixed-program test extension.
 
 - [Day 1: RTL fundamentals](docs/notes/day01.md)
 - [Day 6: Initial datapath integration](docs/notes/day06.md)

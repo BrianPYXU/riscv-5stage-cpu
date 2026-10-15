@@ -452,7 +452,7 @@ x5 = 12
 x6 = 32
 ```
 
-This test verifies:
+This test sequence exercises the following design mechanisms:
 
 ```text
 LW execution
@@ -463,6 +463,8 @@ ID/EX bubble insertion
 Loaded-data forwarding
 Final architectural state
 ```
+
+The saved testbench automatically checks the final values `x5 = 12` and `x6 = 32`. It does not separately assert the exact stall length or each pipeline register's per-cycle hold/flush behavior; those signals can be inspected in the waveform.
 
 The self-checking test reported:
 
