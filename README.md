@@ -2,7 +2,7 @@
 
 A 32-bit, five-stage pipelined processor implemented in Verilog, supporting ten selected RV32I instructions. The project explores how forwarding, pipeline stalls, and branch flushing preserve correct execution when instructions overlap.
 
-The design includes PC-based instruction fetch, separate instruction and data memories, source-aware load-use hazard detection, and directed self-checking testbenches. Development notes trace the implementation from individual RTL modules to mixed-program verification.
+The design includes PC-based instruction fetch, separate instruction and data memories, source-aware load-use hazard detection, same-cycle register-file write-back bypass, and directed self-checking testbenches. Development notes trace the implementation from individual RTL modules to mixed-program verification.
 
 **Start here:** [Architecture](#architecture) · [Design decisions](#design-decisions) · [Run a simulation](#quick-start) · [Verification](#verification) · [Development notes](#development-notes)
 
@@ -13,6 +13,7 @@ The design includes PC-based instruction fetch, separate instruction and data me
 | Datapath | 32-bit; IF → ID → EX → MEM → WB |
 | Instruction subset | ADD, SUB, AND, OR, XOR, SLT, ADDI, LW, SW, BEQ |
 | Data dependencies | EX/MEM and MEM/WB forwarding, including store data |
+| Register-file reads | Same-cycle write-back bypass on both read ports; x0 remains zero |
 | Load-use hazards | Hold PC and IF/ID; insert an ID/EX bubble |
 | Branches | BEQ resolved in EX using forwarded operands |
 | Taken-branch recovery | Redirect PC; flush IF/ID and ID/EX |
@@ -37,6 +38,7 @@ flowchart LR
     WB --> RF["Register file write port"]
     EXMEM -. "EX/MEM result" .-> EX
     WB -. "Write-back data" .-> EX
+    WB -. "Register-file read bypass" .-> ID
     EX -. "Taken branch: redirect PC" .-> IF
 ```
 
@@ -50,7 +52,7 @@ The diagram shows the main datapath and forwarding routes. Hazard and flush cont
 
 Instruction fetch is combinational. Data memory uses combinational reads and synchronous writes. Both memories select words using `address[9:2]`; the testbenches initialize programs and required register/memory state directly.
 
-Read the integration in [pipeline_top.v](RTL/pipeline_top.v), then follow the [forwarding unit](RTL/forwarding_unit.v), [hazard detector](RTL/hazard_detection_unit.v), and [instruction decoder](RTL/instruction_decoder.v).
+Read the integration in [pipeline_top.v](RTL/pipeline_top.v), then follow the [register file](RTL/register_file.v), [forwarding unit](RTL/forwarding_unit.v), [hazard detector](RTL/hazard_detection_unit.v), and [instruction decoder](RTL/instruction_decoder.v).
 
 ## Design decisions
 
@@ -66,6 +68,25 @@ sw   x5, 0(x2)
 ```
 
 The store uses the updated value of `x5`. See the [store-forwarding test](Testbench/pipeline_store_forwarding_tb.v).
+
+### Handle write-back and register reads in the same cycle
+
+The register file writes on the rising clock edge. ID/EX also captures decoded operands on that edge, so reading only the register array can capture an old value when ID reads the register being written by WB.
+
+Both read ports now return `write_data` directly when `write_enable` is asserted and the write address matches the read address. Reads of `x0` still return zero.
+
+The final mixed-program test includes:
+
+```assembly
+addi x13, x0, 7
+addi x14, x0, 1
+addi x15, x0, 2
+add  x16, x13, x13
+```
+
+The two independent ADDI instructions place the final ADD's ID stage in the same cycle as the first ADDI's WB stage. Both read ports must receive 7, producing **x16 = 14**.
+
+This check extends [pipeline_final_tb.v](Testbench/pipeline_final_tb.v), alongside the original arithmetic, memory, and branch checks.
 
 ### Distinguish real load-use dependencies from immediate bits
 
@@ -147,25 +168,29 @@ The core regression suite comprises eight directed self-checking testbenches:
 | [pipeline_store_forwarding_tb](Testbench/pipeline_store_forwarding_tb.v) | Store receives the preceding ADDI result |
 | [pipeline_branch_tb](Testbench/pipeline_branch_tb.v) | BEQ taken and not-taken decisions |
 | [pipeline_branch_fetch_tb](Testbench/pipeline_branch_fetch_tb.v) | Wrong-path suppression and branch-target execution |
-| [pipeline_final_tb](Testbench/pipeline_final_tb.v) | Combined arithmetic, logic, memory, dependency, and branch behavior |
+| [pipeline_final_tb](Testbench/pipeline_final_tb.v) | Mixed arithmetic, logic, memory and branches; same-cycle WB/ID reads on both source ports |
 
-The project's recorded core-regression result is **8/8 testbenches reporting PASS**. These are directed functional checks, not an ISA-compliance result or a coverage percentage.
+The WB/ID case is part of the existing final mixed-program test, so the core suite still contains eight testbenches. These are directed functional checks; the table describes their test scope rather than an ISA-compliance result or a coverage percentage.
 
 Additional tests under [Testbench/](Testbench/) exercise individual modules. Some use waveform inspection or printed signals rather than automatic assertions.
 
 ### Mixed-program result
 
-The final program combines all ten supported instructions, stores and reloads a result, exercises a load-use dependency, and skips a wrong-path register write.
+The final program combines all ten supported instructions, stores and reloads a result, exercises a load-use dependency, and skips a wrong-path register write. Four appended instructions check same-cycle write-back and register reads.
 
 | Architectural state | Expected value | Purpose |
 | --- | ---: | --- |
+| x1 / x2 | 12 / 10 | Initial ADDI results |
 | x3 | 22 | Dependent arithmetic result |
 | memory[0] and x9 | 22 | Store/load consistency |
 | x10 | 32 | Load-use dependent addition |
 | x4 / x5 / x6 / x7 / x8 | 2 / 8 / 14 / 6 / 1 | SUB / AND / OR / XOR / SLT |
 | x11 / x12 | 0 / 42 | Wrong-path suppression / target execution |
+| x13 | 7 | Value written back during the final ADD's ID stage |
+| x14 / x15 | 1 / 2 | Independent instructions spacing the WB/ID case |
+| x16 | 14 | Both source operands read the current x13 write-back value |
 
-The full initialization and checks are in [pipeline_final_tb.v](Testbench/pipeline_final_tb.v).
+The full initialization and checks are in [pipeline_final_tb.v](Testbench/pipeline_final_tb.v). The updated test waits 300 ns after reset is released, then compares the expected register and memory values using `!==`. Unknown values therefore count as errors, alongside incorrect known values. The `errors` counter determines the printed PASS/FAIL result.
 
 ### Representative waveforms
 
@@ -173,7 +198,9 @@ The full initialization and checks are in [pipeline_final_tb.v](Testbench/pipeli
 
 ![Mixed-program simulation waveform](docs/waveforms/pipeline_final_waveform.png)
 
-Read this capture alongside the expected-state table and testbench. The test checks the architectural results after the program has progressed through the pipeline.
+The updated capture includes x13–x16 and the write-back/read signals. During the bypass case, `rd_wb`, `rs1_id`, and `rs2_id` are all `0D` (x13), while `wb_data`, `read_data1_id`, and `read_data2_id` are 7. The final ADD later writes `0000000E` (decimal 14) to x16.
+
+Instruction locations beyond the loaded program are uninitialized, so decode and read signals may show X values after the program has completed. The expected-state table refers to the registers and memory checked by the testbench.
 
 **Branch-target fetch**
 
@@ -207,7 +234,8 @@ More captures, including forwarding and hazard-unit simulations, are available i
 
 The notes preserve the project as it evolved; early entries describe the implementation at that point in development.
 
-- [Days 1–6: RTL modules and initial integration](docs/notes/day01.md)
+- [Day 1: RTL fundamentals](docs/notes/day01.md)
+- [Day 6: Initial datapath integration](docs/notes/day06.md)
 - [Day 7: Pipeline organization](docs/notes/day07.md)
 - [Day 13: Forwarding unit](docs/notes/day13.md)
 - [Day 14: Memory access and load-use hazards](docs/notes/day14.md)
@@ -224,7 +252,8 @@ The memory arrays use only `address[9:2]`, without alignment or out-of-range tra
 
 Priorities for further development:
 
-- Strengthen checks so unknown values fail explicitly, and make test failures return a nonzero exit status.
-- Automate regression execution and add cycle-level stall/flush checks, same-cycle write-back/register-read dependencies, and negative branch offsets.
+- Extend the final test's explicit unknown-value checks to the remaining automatic tests, and make test failures return a nonzero exit status.
+- Add cycle-level stall/flush checks, negative branch offsets, and further WB/ID cases involving loads, stores, and branches.
+- Automate regression execution.
 - Evaluate synthesis and timing with a defined target and workload before making area, frequency, or CPI claims.
 

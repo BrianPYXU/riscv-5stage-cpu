@@ -16,6 +16,6 @@ always @(posedge clk)begin
     if(write_enable && write_addr!=5'd0)
         registers[write_addr]<=write_data;
 end
-assign read_data1=(read_addr1==5'd0) ? 32'd0:registers[read_addr1];
-assign read_data2=(read_addr2==5'd0) ? 32'd0:registers[read_addr2];
+assign read_data1=(read_addr1==5'd0) ? 32'd0 : (write_enable && (write_addr == read_addr1)) ? write_data :registers[read_addr1];
+assign read_data2=(read_addr2==5'd0) ? 32'd0 : (write_enable && (write_addr == read_addr2)) ? write_data : registers[read_addr2];
 endmodule
